@@ -1,0 +1,103 @@
+---
+title: "Check Digit Reverse Engineering"
+author: "Caroline Zunckel, PhD"
+date: "10/30/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      dev.args = list(bg="transparent"),
+                      message = FALSE, warning = FALSE, echo = FALSE,
+                      # dev = "svg",
+                      fig.width = 4, fig.height = 3,scipen=999)
+```
+
+### Problem Summary
+
+The task is to reverse engineer the check digit algorithm for a set of Canadian bank account numbers (7 digits in length).  The purpose of the check digit in general (the 8th digit in this case) is to capture human transcription errors.  
+
+Based on research of international check digit algorithms, I have identified 3 parts to a typical check digit algorithm.  
+
+1.  Each digit (including the check digit) is multiplied by a factor with the purpose of detecting a single digit error.  Using successive factors which are non-identical guards against almost all transpositional errors of adjacent digits. For example, the Luhn algorithm uses a factor of 1 for odd digits and 2 for the even digits.  
+
+2.  Once the original digits have been multiplied by their factors, some check digit algorithms de-concatenate the double-digit numbers and then add them to make one single digit. For example, if digit 8 is multipled by a factor of 3 to yield 24, the “2” and “4” are then added together to give 6.  The Luhn algorithm is an example of a check digit algorithm which implements this digit addition.
+
+3.  The resultant digits from steps 1 and 2 are then added together and the modulo X of this sum is taken, where X is some number.   For example, the Luhn algorithm uses X=10.  If the modulo X of the sum returns 0, then the number is deemed to be valid.
+
+
+Given that the Damn algorithm and Verhoeff algorithm have already been checked and eliminated as solutions, my proposal is to construct a generalized algorithm based on these 3 steps which accepts a set of 7 factors in step 1, the implementation / absence of digit addition in step 2 and the modulo X in step as variables.   By testing all combinations of these 3 variables, we hope to find the correct combination which yields 0 in step 3 for the entire set of data.  
+
+### Data
+
+
+David provided a set of 20 account numbers which have been verified as correct:
+```{r, echo=FALSE}
+library(plyr)
+library(dplyr)
+setwd("~/Home/DataScience/check-digit/")
+
+
+#========================================================
+# Data
+#========================================================
+    
+    #account.numbers <- read.table("~/Home/DataScience/check-digit/account-numbers.csv", comment.char="")
+    account.numbers <- read.csv("~/Home/DataScience/check-digit/account-numbers-verified.csv", sep="")
+    names(account.numbers)<-c("account")
+    #account.numbers$account<-str_replace(account.numbers$account, "-","")
+    
+    account.numbers$acc_number<-substr(account.numbers$account, 1, 6) %>% as.character()
+    account.numbers$check_digit<-substr(account.numbers$account, 7, 7) %>% as.character()
+
+    head(account.numbers)
+    #========================================================
+    
+n = 9
+r = 7
+P = factorial(n) /factorial(n-r)
+X = 16 -10+1
+DA = 2
+tot = P*DA*X
+```
+
+
+### The code:
+
+The code to carry out the parameter search is written in R.   
+
+Given the huge number of combinations which must be tested, I have parallelized the code over 7 of the 8 cores on my machine.  This means that we are significantly reducing the computing time.  
+
+Given the assurance that the latest set of account numbers have been verified as correct, I have further reduced the computation time by throwing out a parameter combination if the first account number in the list is shown to be incorrect.   This means that we do not waste time testing the remaining 19 account numbers for that parameter combination.  
+
+#### Parameter Search
+
+The factors used in step 1 typically tend to be between 1 and 9. The number of permutations of factors is given by nPr= n! / (n - r)! where n is 9 and r = 7.  This leads to `r P` combinations to be tested.  
+
+Based on research, X is typically between 10 and 16.  This means that each of the `r P` factor combinations each have to be tested with one of the `r X` modulo X choices.  Given that we are also considering the implementation of the digit additon (in step 2) as either “on” or “off”, the total number combinations that we are testing are `r tot`.
+
+
+This parameter range choice covers check digit algorithms such as UPC, ISBN 10 and ISBN 13 and EAN.  Based on <https://docs.oracle.com/cd/E18727_01/doc.121/e13483/T359831T498954.htm>, the check digit algorithms for account numbers from the following countries are also covered by the current parameter range:  Iceland, Norway and the Netherlands. Account numbers from France and Belgium would not be tested as their check digit algorithms use a modulo of 97.  Furthermore, Colombia’s tax payer IDs have factors ranging between 7 and 71 which is excluded from our search range.   
+
+#### Results
+
+Unfortunately the above described parameter search did not yield any successive matches. 
+
+### Next steps
+```{r, echo=FALSE}
+n2 = 30
+n1 = 11
+num = n2-n1+1
+P2 = factorial(num) /factorial(num-r)
+Ptot = P2*30
+X = 16 -10+1
+DA = 2
+tot2 = Ptot*DA*X
+```
+The following next steps could be taken:
+
+1.  Conduct a larger parameter space search.  
+
+Currently I have increased the range of factors being tested to between 11 and 30.  The total number of parameter combinations is `r tot2` so it is extremely computationally expensive and will take some time to complete.    
+
+
